@@ -1,347 +1,345 @@
-# NeuroBudget — AI Financial Copilot
+# NeuroBudget - AI Financial Copilot
 
-An intelligent financial assistant built with FastAPI, LangGraph, FAISS, and OpenRouter.
+An intelligent multi-agent financial assistant powered by LangGraph, FAISS, and OpenRouter.
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Python-3.10+-blue?logo=python&logoColor=white" />
+  <img src="https://img.shields.io/badge/FastAPI-0.111-009688?logo=fastapi&logoColor=white" />
+  <img src="https://img.shields.io/badge/LangGraph-0.1.9-orange" />
+  <img src="https://img.shields.io/badge/OpenRouter-GPT--4o--mini-purple" />
+  <img src="https://img.shields.io/badge/License-MIT-green" />
+</p>
 
 ---
 
-## Architecture
+## Overview
 
-```
+NeuroBudget is an AI-powered personal finance assistant that helps users:
+
+- Upload and analyze bank statements
+- Categorize expenses automatically
+- Generate financial insights
+- Detect overspending and anomalies
+- Build savings plans
+- Chat with financial data using AI + RAG
+
+The system combines:
+
+- **FastAPI**
+- **LangGraph Multi-Agent Workflows**
+- **FAISS Vector Search**
+- **OpenRouter LLMs**
+- **SQLite**
+- **Sentence Transformers**
+
+---
+
+# Features
+
+## AI Financial Chat
+
+Ask questions like:
+
+- "How much did I spend on food?"
+- "Where am I overspending?"
+- "What are my biggest expenses?"
+
+Powered using:
+- RAG Retrieval
+- OpenRouter GPT models
+- Session memory
+
+---
+
+## Smart Expense Categorization
+
+Automatically categorizes transactions into:
+
+| Category | Examples |
+|---|---|
+| Food | Swiggy, Zomato |
+| Transport | Uber, Ola |
+| Shopping | Amazon, Flipkart |
+| Entertainment | Netflix, Spotify |
+| Utilities | Airtel, Jio |
+| Travel | Airbnb, Goibibo |
+
+---
+
+## Financial Insights
+
+Generate:
+- Spending summaries
+- Top categories
+- Daily averages
+- Savings estimates
+- AI-generated recommendations
+
+---
+
+## Goal Planning
+
+Create savings plans such as:
+
+- Emergency Fund
+- Laptop Purchase
+- Vacation Planning
+
+The AI calculates:
+- Monthly savings required
+- Goal achievability
+- Personalized recommendations
+
+---
+
+## Risk Analysis
+
+Detect:
+- Overspending
+- Budget spikes
+- Spending anomalies
+- Unsafe spending patterns
+
+---
+
+# Architecture
+
+```text
 User Request
-     ↓
+     |
+     v
 FastAPI Endpoints
-     ↓
+/chat  /upload-csv  /insights  /goal-plan  /risk-analysis
+     |
+     v
 LangGraph Multi-Agent Workflow
-  ├── ExpenseAgent   → categorizes & totals spending
-  ├── InsightAgent   → LLM-generated insights (OpenRouter)
-  ├── RiskAgent      → detects anomalies & overspending
-  └── PlanningAgent  → creates savings plans
-     ↓
-FAISS (RAG retrieval) + SQLite (storage)
-     ↓
-JSON Response (with Plotly chart data)
+     |
+     +--> ExpenseAgent
+     +--> InsightAgent
+     +--> RiskAgent
+     +--> PlanningAgent
+     |
+     v
+FAISS Vector Search + SQLite
+     |
+     v
+JSON Response + Plotly Chart Data
 ```
 
 ---
 
-## Setup Instructions
+# Project Structure
 
-### 1. Clone and navigate
+```text
+NeuroBudget/backend/
+
+├── app.py
+├── config.py
+├── requirements.txt
+├── .env.example
+├── sample_transactions.csv
+
+├── agents/
+│   ├── expense_agent.py
+│   ├── insight_agent.py
+│   ├── risk_agent.py
+│   ├── planning_agent.py
+│   └── workflow.py
+
+├── tools/
+│   ├── file_parser.py
+│   ├── categorizer.py
+│   ├── calculator.py
+│   └── charts.py
+
+├── rag/
+│   ├── embeddings.py
+│   ├── vectorstore.py
+│   └── retriever.py
+
+├── database/
+│   ├── db.py
+│   └── chat_memory.py
+
+├── models/
+│   ├── schemas.py
+│   └── state.py
+
+├── uploads/
+└── vectorstore/
+```
+
+---
+
+# Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Backend API | FastAPI |
+| AI Workflow | LangGraph |
+| LLM Provider | OpenRouter |
+| Embeddings | sentence-transformers |
+| Vector Database | FAISS |
+| Database | SQLite |
+| ORM | SQLAlchemy |
+| Validation | Pydantic |
+| Data Processing | Pandas |
+| PDF Parsing | pdfplumber |
+| Charts | Plotly JSON |
+
+---
+
+# Installation
+
+## 1. Clone Repository
 
 ```bash
+git clone https://github.com/nirajg5/NeuroBudget.git
 cd NeuroBudget/backend
 ```
 
-### 2. Create a virtual environment
+---
+
+## 2. Create Virtual Environment
+
+### Linux/macOS
 
 ```bash
 python -m venv venv
-source venv/bin/activate        # Linux/Mac
-venv\Scripts\activate           # Windows
+source venv/bin/activate
 ```
 
-### 3. Install dependencies
+### Windows
+
+```bash
+python -m venv venv
+venv\Scripts\activate
+```
+
+---
+
+## 3. Install Dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 4. Configure environment
+---
 
-```bash
-cp .env.example .env
-```
+## 4. Configure Environment Variables
 
-Edit `.env` and set your OpenRouter API key:
+Create `.env`
 
-```
-OPENROUTER_API_KEY=your_key_here
+```env
+OPENROUTER_API_KEY=your_api_key
 OPENROUTER_MODEL=openai/gpt-4o-mini
 ```
 
-Get your free API key at: https://openrouter.ai
+---
 
-### 5. Run the server
+## 5. Run Application
 
 ```bash
 python app.py
 ```
 
-Or with uvicorn directly:
+OR
 
 ```bash
-uvicorn app:app --reload --host 0.0.0.0 --port 8000
-```
-
-### 6. Access the API docs
-
-Open: http://localhost:8000/docs
-
----
-
-## API Endpoints
-
-### `GET /health`
-Health check.
-
-```json
-{
-  "status": "ok",
-  "model": "openai/gpt-4o-mini",
-  "version": "1.0.0"
-}
+uvicorn app:app --reload
 ```
 
 ---
 
-### `POST /chat`
-Conversational AI financial assistant.
+# API Endpoints
 
-**Request:**
-```json
-{
-  "message": "How much did I spend on food this month?",
-  "session_id": "user_123"
-}
-```
+| Endpoint | Method | Description |
+|---|---|---|
+| `/health` | GET | Health check |
+| `/chat` | POST | AI financial assistant |
+| `/upload-csv` | POST | Upload bank statement |
+| `/insights` | GET | Financial analysis |
+| `/goal-plan` | POST | Savings planning |
+| `/risk-analysis` | GET | Risk detection |
 
-**Response:**
-```json
-{
-  "response": "Based on your transactions, you spent ₹2,740 on food this month across 7 transactions. Swiggy and Zomato account for 65% of this. Consider cooking at home 2-3 times a week to save around ₹800/month.",
-  "reasoning": "Response generated using 5 past messages + RAG context (30 transactions indexed). Model: openai/gpt-4o-mini.",
-  "session_id": "user_123",
-  "timestamp": "2024-01-30T10:30:00"
-}
+---
+
+# Example API Usage
+
+## Upload CSV
+
+```bash
+curl -X POST http://localhost:8000/upload-csv \
+-F "file=@sample_transactions.csv"
 ```
 
 ---
 
-### `POST /upload-csv`
-Upload a bank statement CSV or PDF.
+## Chat with AI
 
-**Form data:** `file` (multipart)
-
-**Response:**
-```json
-{
-  "message": "Successfully processed 30 transactions.",
-  "filename": "january_statement.csv",
-  "rows_processed": 30,
-  "categories_found": ["Food", "Transport", "Shopping", "Entertainment", "Groceries"],
-  "total_amount": 31551.0,
-  "preview": [
-    {
-      "date": "2024-01-01",
-      "description": "Swiggy Order - Biryani",
-      "amount": 350.0,
-      "category": "Food",
-      "source": "january_statement.csv"
-    }
-  ]
-}
+```bash
+curl -X POST http://localhost:8000/chat \
+-H "Content-Type: application/json" \
+-d "{\"message\":\"How much did I spend on food?\",\"session_id\":\"user_1\"}"
 ```
 
 ---
 
-### `GET /insights`
-Full financial analysis with AI summary.
+## Get Insights
 
-**Response:**
+```bash
+curl http://localhost:8000/insights
+```
+
+---
+
+# Example Response
+
 ```json
 {
   "total_spending": 31551.0,
   "top_category": "Shopping",
-  "top_category_amount": 7297.0,
-  "savings_estimate": 6310.2,
   "average_daily_spend": 1051.7,
-  "spending_by_category": {
-    "Shopping": 7297.0,
-    "Food": 2740.0,
-    "Transport": 2380.0,
-    "Entertainment": 2767.0,
-    "Groceries": 2900.0,
-    "Health": 990.0,
-    "Utilities": 3498.0,
-    "Travel": 4650.0,
-    "Education": 799.0
-  },
-  "spending_trend": [
-    {"date": "2024-01-01", "amount": 350.0},
-    {"date": "2024-01-02", "amount": 180.0}
-  ],
-  "alerts": [
-    {
-      "type": "overspending",
-      "message": "Shopping is 23.1% of total spending",
-      "severity": "medium",
-      "amount": 7297.0
-    }
-  ],
-  "ai_summary": "**Summary:** Your January spending totalled ₹31,551 with Shopping (23%) and Travel (15%) as the biggest drains...",
-  "reasoning": "ExpenseAgent: Analyzed 30 transactions → InsightAgent: Generated LLM insights → RiskAgent: Risk score=25/100 → PlanningAgent: Generated final response"
+  "risk_score": 25,
+  "ai_summary": "Shopping and travel are your largest expenses."
 }
 ```
 
 ---
 
-### `POST /goal-plan`
-Create a savings plan for a financial goal.
+# Why NeuroBudget?
 
-**Request:**
-```json
-{
-  "target_amount": 100000,
-  "timeline_months": 6,
-  "monthly_income": 60000,
-  "goal_name": "Emergency Fund"
-}
-```
+## Explainable AI
 
-**Response:**
-```json
-{
-  "goal_name": "Emergency Fund",
-  "target_amount": 100000.0,
-  "timeline_months": 6,
-  "monthly_savings_required": 16666.67,
-  "is_achievable": true,
-  "steps": [
-    {
-      "month": 1,
-      "target_savings": 16666.67,
-      "cumulative_savings": 16666.67,
-      "suggested_cuts": [
-        "Reduce Entertainment by 15% — save ₹415/month",
-        "Reduce Shopping by 15% — save ₹1,095/month"
-      ]
-    }
-  ],
-  "recommendations": [
-    "Cut Netflix and Spotify to save ₹768/month",
-    "Reduce Swiggy/Zomato orders from 7 to 3 per week — saves ₹1,200/month",
-    "Use public transport twice a week instead of Uber — saves ₹600/month",
-    "Set a ₹3,000 monthly shopping budget with a wishlist cooling period"
-  ],
-  "chart_data": { "type": "line", "data": [...], "layout": {...} },
-  "reasoning": "Goal of ₹100,000 requires saving ₹16,666.67/month over 6 months. This is achievable."
-}
-```
+Every response includes reasoning and transparency.
 
 ---
 
-### `GET /risk-analysis`
-Detect financial risks and anomalies.
+## Local-First Architecture
 
-**Response:**
-```json
-{
-  "overall_risk_level": "low",
-  "risk_score": 25.0,
-  "risk_factors": [
-    {
-      "risk_type": "overspending",
-      "description": "Shopping is 23.1% of total spending",
-      "affected_category": "Shopping",
-      "amount": 7297.0,
-      "severity": "medium",
-      "suggestion": "Try reducing Shopping spending by 20% next month."
-    }
-  ],
-  "anomalies": [
-    {
-      "date": "2024-01-19",
-      "description": "Amazon Prime Subscription",
-      "amount": 1499.0,
-      "category": "Entertainment"
-    }
-  ],
-  "safe_to_spend": 6310.2,
-  "reasoning": "Your risk score of 25/100 indicates low financial risk. The main concern is Shopping at 23% of your budget. Consider setting a monthly shopping cap of ₹5,000."
-}
-```
+- SQLite storage
+- Local FAISS vector database
+- No expensive cloud vector DB required
 
 ---
 
-## Testing with Sample Data
+## Cost Efficient
 
-```bash
-# Upload sample CSV
-curl -X POST http://localhost:8000/upload-csv \
-  -F "file=@sample_transactions.csv"
+Uses:
+- OpenRouter
+- Local embeddings
+- Rule-based categorization
 
-# Get insights
-curl http://localhost:8000/insights
-
-# Chat
-curl -X POST http://localhost:8000/chat \
-  -H "Content-Type: application/json" \
-  -d '{"message": "Where am I spending the most?", "session_id": "test"}'
-
-# Goal plan
-curl -X POST http://localhost:8000/goal-plan \
-  -H "Content-Type: application/json" \
-  -d '{"target_amount": 50000, "timeline_months": 3, "goal_name": "Laptop Fund"}'
-
-# Risk analysis
-curl http://localhost:8000/risk-analysis
-```
+to minimize LLM costs.
 
 ---
 
-## Project Structure
+# Future Improvements
+- Authentication
+- Budget forecasting
+- Monthly reports
+- Real-time notifications
+- Mobile app integration
 
-```
-backend/
-├── app.py              ← FastAPI app + all endpoints
-├── config.py           ← Settings (pydantic-settings + dotenv)
-├── requirements.txt
-├── .env.example
-├── sample_transactions.csv
-│
-├── agents/
-│   ├── expense_agent.py   ← Calculates spending stats
-│   ├── insight_agent.py   ← LLM-generated insights
-│   ├── risk_agent.py      ← Anomaly + overspending detection
-│   ├── planning_agent.py  ← Savings plan generation
-│   └── workflow.py        ← LangGraph StateGraph orchestration
-│
-├── tools/
-│   ├── file_parser.py     ← CSV/PDF parsing + normalization
-│   ├── categorizer.py     ← Rule-based expense categorization
-│   ├── calculator.py      ← Financial math utilities
-│   └── charts.py          ← Plotly-compatible chart builders
-│
-├── rag/
-│   ├── embeddings.py      ← sentence-transformers embedding
-│   ├── vectorstore.py     ← FAISS index management
-│   └── retriever.py       ← RAG query + context formatting
-│
-├── database/
-│   ├── db.py              ← SQLAlchemy SQLite models
-│   └── chat_memory.py     ← Conversation history storage
-│
-├── models/
-│   ├── schemas.py         ← Pydantic request/response models
-│   └── state.py           ← LangGraph AgentState TypedDict
-│
-├── uploads/               ← Uploaded files stored here
-└── vectorstore/           ← FAISS index files stored here
-```
 
----
-
-## Key Design Decisions
-
-| Decision | Reason |
-|---|---|
-| OpenRouter (not OpenAI direct) | Cost-flexible, model-agnostic |
-| SQLite | Zero-config, perfect for MVP |
-| FAISS local | No server needed, fast similarity search |
-| sentence-transformers | Free local embeddings, no API key |
-| LangGraph | Clean multi-agent orchestration with typed state |
-| Rule-based categorization | Fast, transparent, no LLM needed for basic labeling |
-| Explainable AI | Every response includes `reasoning` field |
-#   N e u r o B u d g e t  
- #   N e u r o B u d g e t  
- 
+# 
