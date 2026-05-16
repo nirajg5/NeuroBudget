@@ -342,6 +342,3 @@ backend/
 | LangGraph | Clean multi-agent orchestration with typed state |
 | Rule-based categorization | Fast, transparent, no LLM needed for basic labeling |
 | Explainable AI | Every response includes `reasoning` field |
-#   N e u r o B u d g e t  
- #   N e u r o B u d g e t  
- 
