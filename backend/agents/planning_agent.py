@@ -1,136 +1,558 @@
 """
-planning_agent.py — Fourth (final) agent in the LangGraph workflow.
-Creates personalized savings plans and spending reduction recommendations.
+Planning Agent
+
+Creates savings plans, budget plans,
+and financial goal recommendations.
 """
 
-from openai import OpenAI
-from config import get_settings
-from models.state import AgentState
-from tools.calculator import monthly_savings_plan
+from sqlalchemy.orm import Session
+from sqlalchemy import func
 
-settings = get_settings()
+from database.db import SessionLocal
+from database.models import Transaction, Goal
+from models.state import create_state
 
-client = OpenAI(
-    base_url=settings.openrouter_base_url,
-    api_key=settings.openrouter_api_key,
-)
+from models.state import GraphState
+
+from rag.rag_pipeline import RAGPipeline
+
+from core.logger import logger
 
 
-def planning_agent(state: AgentState) -> AgentState:
+class PlanningAgent:
     """
-    Planning Agent — synthesizes all prior agent outputs into a final
-    actionable savings plan and a cohesive response.
-
-    Reads:
-        state["expense_analysis"]
-        state["insights"]
-        state["risk_flags"]
-        state["user_message"]
-
-    Writes:
-        state["savings_plan"]
-        state["final_response"]
-        state["reasoning_chain"] (appends)
+    Planning Agent
     """
-    reasoning = state.get("reasoning_chain", [])
-    errors = state.get("errors", [])
 
-    try:
-        analysis = state.get("expense_analysis", {})
-        insights = state.get("insights", {})
-        risk_flags = state.get("risk_flags", {})
-        user_msg = state.get("user_message", "")
-        total = analysis.get("total", 0)
-        by_cat = analysis.get("by_category", {})
-        risk_level = risk_flags.get("risk_level", "unknown")
+    def __init__(self):
 
-        # Identify categories where spending could be cut
-        cut_candidates = []
-        discretionary = ["Entertainment", "Shopping", "Food", "Travel"]
-        for cat in discretionary:
-            if cat in by_cat and by_cat[cat] > 0:
-                cut_candidates.append(
-                    f"{cat}: ₹{by_cat[cat]:,.2f} (try cutting 20% = ₹{by_cat[cat]*0.2:,.2f} saved)"
-                )
+        self.db: Session = SessionLocal()
 
-        # Full context for LLM planning
-        planning_context = f"""
-User Question: {user_msg}
+        self.rag = RAGPipeline()
 
-Current Financial Picture:
-- Total Monthly Spending: ₹{total:,.2f}
-- Risk Level: {risk_level.upper()}
-- Risk Score: {risk_flags.get('risk_score', 0):.0f}/100
+    # =====================================================
+    # Total Income
+    # =====================================================
 
-Spending Breakdown:
-{chr(10).join([f"  - {k}: ₹{v:,.2f}" for k, v in by_cat.items()])}
+    def total_income(self):
 
-Areas to Cut:
-{chr(10).join(cut_candidates) if cut_candidates else "  No clear cut candidates identified"}
+        income = (
 
-AI Insights Summary:
-{insights.get('ai_summary', 'No insights available')}
+            self.db.query(
 
-Risk Explanation:
-{risk_flags.get('explanation', 'No risk data')}
-"""
+                func.sum(Transaction.amount)
 
-        # Generate comprehensive final response
-        final_prompt = f"""You are NeuroBudget, an AI financial copilot. 
-        
-Based on the full financial analysis below, create a comprehensive, friendly response to the user.
+            )
 
-{planning_context}
+            .filter(
 
-Your response must include:
-1. **Overall Assessment** — 2-3 sentences on their financial health
-2. **Key Actions** — 3 specific things they can do this month (with amounts)
-3. **Savings Opportunity** — How much they could realistically save if they follow your advice
+                Transaction.flow == "Income"
 
-Be encouraging, specific, and use ₹ amounts. Keep total response under 400 words.
-Format with clear headers."""
+            )
 
-        final_response = client.chat.completions.create(
-            model=settings.openrouter_model,
-            messages=[
-                {"role": "system", "content": "You are a helpful, knowledgeable financial advisor. Be concise but specific."},
-                {"role": "user", "content": final_prompt}
-            ],
-            max_tokens=600,
-            temperature=0.4,
+            .scalar()
+
         )
 
-        final_text = final_response.choices[0].message.content.strip()
+        return float(income or 0)
 
-        # Build a default savings plan (if no specific goal was given)
-        default_goal = total * 6    # 6-month spending as a savings goal
-        plan = monthly_savings_plan(
-            target_amount=default_goal,
-            timeline_months=6,
-            current_spending=total,
+    # =====================================================
+    # Total Expense
+    # =====================================================
+
+    def total_expense(self):
+
+        expense = (
+
+            self.db.query(
+
+                func.sum(Transaction.amount)
+
+            )
+
+            .filter(
+
+                Transaction.flow == "Expense"
+
+            )
+
+            .scalar()
+
         )
 
-        state["savings_plan"] = {
-            "suggested_monthly_savings": plan["monthly_required"],
-            "is_achievable": plan["is_achievable"],
-            "cut_candidates": cut_candidates,
-            "default_goal": default_goal,
+        return float(expense or 0)
+    
+    # =====================================================
+    # Disposable Income
+    # =====================================================
+
+    def disposable_income(self):
+
+        return (
+
+            self.total_income()
+
+            -
+
+            self.total_expense()
+
+        )
+    
+    # =====================================================
+    # Load Goals
+    # =====================================================
+
+    def load_goals(self):
+
+        goals = (
+
+            self.db.query(Goal)
+
+            .all()
+
+        )
+
+        return goals
+    # =====================================================
+    # Active Goals
+    # =====================================================
+
+    def active_goals(self):
+
+        goals = (
+
+            self.db.query(Goal)
+
+            .filter(
+
+                Goal.status == "Active"
+
+            )
+
+            .all()
+
+        )
+
+        return goals
+    
+    # =====================================================
+    # Completed Goals
+    # =====================================================
+
+    def completed_goals(self):
+
+        goals = (
+
+            self.db.query(Goal)
+
+            .filter(
+
+                Goal.status == "Completed"
+
+            )
+
+            .all()
+
+        )
+
+        return goals
+    # =====================================================
+    # Goal Count
+    # =====================================================
+
+    def goal_count(self):
+
+        return (
+
+            self.db.query(Goal)
+
+            .count()
+
+        )
+    # =====================================================
+    # Planning Summary
+    # =====================================================
+
+    def planning_summary(self):
+
+        summary = {
+
+            "total_income": self.total_income(),
+
+            "total_expense": self.total_expense(),
+
+            "disposable_income": self.disposable_income(),
+
+            "total_goals": self.goal_count(),
+
+            "active_goals": len(self.active_goals()),
+
+            "completed_goals": len(self.completed_goals())
+
         }
 
-        state["final_response"] = final_text
+        return summary
+    
 
-        reasoning.append(
-            f"PlanningAgent: Generated final response. "
-            f"Suggested monthly savings: ₹{plan['monthly_required']:,.2f}. "
-            f"Plan achievable: {plan['is_achievable']}."
+    # =====================================================
+    # Monthly Savings Required
+    # =====================================================
+
+    def monthly_savings_required(
+        self,
+        target_amount: float,
+        current_amount: float,
+        deadline_months: int
+    ):
+
+        remaining = max(
+            target_amount - current_amount,
+            0
         )
 
-    except Exception as e:
-        errors.append(f"PlanningAgent error: {str(e)}")
-        state["savings_plan"] = {}
-        state["final_response"] = "I was unable to generate a savings plan at this time. Please try again."
-        reasoning.append(f"PlanningAgent: Failed — {str(e)}")
+        if deadline_months <= 0:
+            return remaining
 
-    state["reasoning_chain"] = reasoning
-    state["errors"] = errors
-    return state
+        return round(
+            remaining / deadline_months,
+            2
+        )
+
+    # =====================================================
+    # Goal Feasibility
+    # =====================================================
+
+    def goal_feasible(
+        self,
+        target_amount: float,
+        current_amount: float,
+        deadline_months: int
+    ):
+
+        monthly_required = self.monthly_savings_required(
+            target_amount,
+            current_amount,
+            deadline_months
+        )
+
+        disposable = self.disposable_income()
+
+        return disposable >= monthly_required
+
+    # =====================================================
+    # Estimated Completion Time
+    # =====================================================
+
+    def estimated_completion_months(
+        self,
+        target_amount: float,
+        current_amount: float
+    ):
+
+        disposable = self.disposable_income()
+
+        if disposable <= 0:
+            return None
+
+        remaining = max(
+            target_amount - current_amount,
+            0
+        )
+
+        months = remaining / disposable
+
+        return round(months, 1)
+
+    # =====================================================
+    # Savings Recommendation
+    # =====================================================
+
+    def savings_recommendation(
+        self,
+        target_amount: float,
+        current_amount: float,
+        deadline_months: int
+    ):
+
+        monthly_required = self.monthly_savings_required(
+            target_amount,
+            current_amount,
+            deadline_months
+        )
+
+        disposable = self.disposable_income()
+
+        feasible = disposable >= monthly_required
+
+        if feasible:
+
+            message = (
+                f"You should save ₹{monthly_required:.2f} "
+                f"per month to reach your goal."
+            )
+
+        else:
+
+            shortage = monthly_required - disposable
+
+            message = (
+                f"Your goal is difficult with your current finances. "
+                f"You need an additional ₹{shortage:.2f} per month."
+            )
+
+        return {
+            "monthly_required": monthly_required,
+            "disposable_income": disposable,
+            "feasible": feasible,
+            "recommendation": message
+        }
+
+    # =====================================================
+    # Analyze Goal
+    # =====================================================
+
+    def analyze_goal(self, goal):
+
+        recommendation = self.savings_recommendation(
+            target_amount=goal.target_amount,
+            current_amount=goal.current_amount,
+            deadline_months=goal.deadline_months
+        )
+
+        completion = self.estimated_completion_months(
+            target_amount=goal.target_amount,
+            current_amount=goal.current_amount
+        )
+
+        return {
+            "goal_name": goal.goal_name,
+            "target_amount": goal.target_amount,
+            "current_amount": goal.current_amount,
+            "deadline_months": goal.deadline_months,
+            "estimated_completion": completion,
+            **recommendation
+        }
+
+    # =====================================================
+    # Analyze Active Goals
+    # =====================================================
+
+    def analyze_active_goals(self):
+
+        goals = self.active_goals()
+
+        reports = []
+
+        for goal in goals:
+            reports.append(
+                self.analyze_goal(goal)
+            )
+
+        return reports
+    
+    # =====================================================
+# Monthly Budget Allocation (50/30/20 Rule)
+# =====================================================
+
+ # =====================================================
+# Monthly Budget Allocation (50/30/20 Rule)
+# =====================================================
+
+    def budget_plan(self):
+
+       income = self.total_income()
+
+       return {
+
+        "monthly_income": round(income, 2),
+
+        "needs_budget": round(income * 0.50, 2),
+
+        "wants_budget": round(income * 0.30, 2),
+
+        "savings_budget": round(income * 0.20, 2)
+
+    }
+    
+# =====================================================
+# Emergency Fund
+# =====================================================
+
+    def emergency_fund(self):
+
+      expense = self.total_expense()
+
+      monthly_expense = expense / 12 if expense > 0 else 0
+
+      return {
+
+        "recommended_fund": round(monthly_expense * 6, 2),
+
+        "monthly_expense": round(monthly_expense, 2)
+
+    }
+
+# =====================================================
+# Savings Capacity
+# =====================================================
+
+    def savings_capacity(self):
+
+      disposable = self.disposable_income()
+
+      if disposable <= 0:
+
+        return {
+
+            "status": "Low",
+
+            "monthly_savings": 0
+
+        }
+
+      elif disposable < 5000:
+
+        return {
+
+            "status": "Moderate",
+
+            "monthly_savings": disposable
+
+        }
+
+      else:
+
+        return {
+
+            "status": "Excellent",
+
+            "monthly_savings": disposable
+
+        }
+      
+
+# =====================================================
+# Financial Planning Report
+# =====================================================
+
+    def financial_plan(self):
+
+     return {
+
+        "summary": self.planning_summary(),
+
+        "budget": self.budget_plan(),
+
+        "emergency_fund": self.emergency_fund(),
+
+        "savings_capacity": self.savings_capacity(),
+
+        "goal_analysis": self.analyze_active_goals()
+
+     }
+    
+
+    def planning_prompt(
+      self,
+      question: str,
+      report: dict
+    ):
+
+      return f"""
+      You are an AI Financial Planning Assistant.
+
+      User Question:
+      {question}
+
+      Financial Report:
+      {report}
+
+      Instructions:
+
+      1. Explain whether the financial goal is achievable.
+      2. Mention disposable income.
+      3. Mention monthly savings required.
+      4. Mention emergency fund recommendation.
+      5. Give practical financial advice.
+      6. Answer using the provided report only.
+     """
+    
+
+# =====================================================
+# Execute Planning Agent
+# =====================================================
+
+    def run(
+      self,
+      state: GraphState
+    ) -> GraphState:
+
+     logger.info("Planning Agent Started...")
+
+    # ---------------------------------------
+    # Financial Report
+    # ---------------------------------------
+
+     report = self.financial_plan()
+
+    # ---------------------------------------
+    # Retrieve Financial Context
+    # ---------------------------------------
+
+     rag_result = self.rag.ask(
+
+        state["question"]
+
+     )
+
+    # ---------------------------------------
+    # Build Planning Prompt
+    # ---------------------------------------
+
+     prompt = self.planning_prompt(
+
+        state["question"],
+
+        report
+
+    )
+
+    # ---------------------------------------
+    # Ask LLM
+    # ---------------------------------------
+
+     explanation = self.rag.generate_answer(
+
+        prompt
+
+    )
+
+    # ---------------------------------------
+    # Update Graph State
+    # ---------------------------------------
+
+     state["retrieved_documents"] = rag_result["sources"]
+
+     state["prompt"] = prompt
+
+     state["answer"] = explanation
+
+     state["planning"] = report
+ 
+     state["goals"] = report["goal_analysis"]
+
+     state["current_agent"] = "PlanningAgent"
+ 
+     logger.success("Planning Agent Finished.")
+
+     return state
+    
+
+planning_agent = PlanningAgent()
+
+
+def planning_node(
+       state: GraphState
+    ):
+
+    return planning_agent.run(state)

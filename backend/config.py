@@ -1,49 +1,40 @@
-"""
-config.py — Centralized app configuration using pydantic-settings.
-Reads from .env file automatically.
-"""
-
 from pydantic_settings import BaseSettings
-from functools import lru_cache
-import os
 
 
 class Settings(BaseSettings):
-    # OpenRouter
-    openrouter_api_key: str = ""
-    openrouter_model: str = "openai/gpt-4o-mini"
-    openrouter_base_url: str = "https://openrouter.ai/api/v1"
 
-    # App
-    app_host: str = "0.0.0.0"
-    app_port: int = 8000
-    debug: bool = True
+    APP_NAME: str = "NeuroBudget"
 
-    # Database
-    database_url: str = "sqlite:///./neurobudget.db"
+    APP_VERSION: str = "1.0.0"
 
-    # File Uploads
-    upload_dir: str = "uploads"
-    max_upload_size_mb: int = 10
+    DEBUG: bool = True
 
-    # Vector Store
-    vectorstore_dir: str = "vectorstore"
+    HOST: str = "0.0.0.0"
 
-    # Embedding model (local sentence-transformers)
-    embedding_model: str = "all-MiniLM-L6-v2"
+    PORT: int = 8000
+
+    POSTGRES_USER: str
+
+    POSTGRES_PASSWORD: str
+
+    POSTGRES_HOST: str
+
+    POSTGRES_PORT: int
+
+    POSTGRES_DB: str
+
+    OPENROUTER_API_KEY: str
+
+    OPENROUTER_MODEL: str
+
+    PINECONE_API_KEY: str
+
+    PINECONE_INDEX: str
+
+    PINECONE_REGION: str
 
     class Config:
         env_file = ".env"
-        env_file_encoding = "utf-8"
 
 
-@lru_cache()
-def get_settings() -> Settings:
-    """Cached settings instance — call this everywhere instead of re-reading env."""
-    return Settings()
-
-
-# Create required directories on import
-settings = get_settings()
-os.makedirs(settings.upload_dir, exist_ok=True)
-os.makedirs(settings.vectorstore_dir, exist_ok=True)
+settings = Settings()

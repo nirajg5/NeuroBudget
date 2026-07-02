@@ -1,52 +1,193 @@
 """
-retriever.py — High-level RAG retrieval interface.
-Wraps vectorstore search with context formatting for LLM prompts.
+Retriever
+
+Retrieves relevant transactions from Pinecone.
 """
 
 from typing import List, Dict, Optional
-from rag.vectorstore import search_similar_transactions
+
+from rag.embeddings import EmbeddingModel
+from rag.pinecone_client import get_index
+
+from core.logger import logger
 
 
-def retrieve_relevant_transactions(
-    query: str,
-    top_k: int = 5
-) -> List[Dict]:
+class Retriever:
+
     """
-    Retrieve transactions most relevant to the user's query.
-    Used to inject context into LLM prompts.
+    Semantic Retriever
     """
-    return search_similar_transactions(query, top_k=top_k)
 
+    def __init__(self):
 
-def format_transactions_as_context(transactions: List[Dict]) -> str:
-    """
-    Format retrieved transactions into a readable string for LLM context.
+        self.index = get_index()
 
-    Example output:
-        Transaction 1: 2024-01-05 | Swiggy Order | ₹350 | Food
-        Transaction 2: 2024-01-07 | Uber Ride | ₹180 | Transport
-    """
-    if not transactions:
-        return "No relevant transactions found."
+    # ======================================================
+    # Search Pinecone
+    # ======================================================
 
-    lines = []
-    for i, t in enumerate(transactions, 1):
-        line = (
-            f"Transaction {i}: "
-            f"{t.get('date','N/A')} | "
-            f"{t.get('description','N/A')} | "
-            f"₹{t.get('amount', 0):,.2f} | "
-            f"{t.get('category','Other')}"
+    def search(
+        self,
+        query: str,
+        top_k: int = 5,
+        metadata_filter: Optional[dict] = None
+    ) -> List[Dict]:
+
+        logger.info(f"Searching for: {query}")
+
+        query_embedding = EmbeddingModel.embed_text(query)
+
+        response = self.index.query(
+
+            vector=query_embedding,
+
+            top_k=top_k,
+
+            include_metadata=True,
+
+            filter=metadata_filter
+
         )
-        lines.append(line)
 
-    return "\n".join(lines)
+        results = []
 
+        for match in response.matches:
 
-def build_rag_context(query: str, top_k: int = 5) -> str:
-    """
-    One-shot helper: retrieve + format context string.
-    Pass this into LLM prompts to ground responses in real data.
-    """
-    relevant = retrieve_relevant_transactions(query, top_k=top_k)
-    return format_transactions_as_context(relevant)
+            results.append({
+
+                "id": match.id,
+
+                "score": round(match.score, 4),
+
+                "metadata": match.metadata
+
+            })
+
+        logger.success(
+            f"{len(results)} transactions retrieved."
+        )
+
+        return results
+
+    # ======================================================
+    # Search by Category
+    # ======================================================
+
+    def search_category(
+        self,
+        query: str,
+        category: str,
+        top_k: int = 5
+    ):
+
+        return self.search(
+
+            query=query,
+
+            top_k=top_k,
+
+            metadata_filter={
+
+                "category": category
+
+            }
+
+        )
+
+    # ======================================================
+    # Search by Merchant
+    # ======================================================
+
+    def search_merchant(
+        self,
+        query: str,
+        merchant: str,
+        top_k: int = 5
+    ):
+
+        return self.search(
+
+            query=query,
+
+            top_k=top_k,
+
+            metadata_filter={
+
+                "merchant": merchant
+
+            }
+
+        )
+
+    # ======================================================
+    # Search Expenses Only
+    # ======================================================
+
+    def search_expenses(
+        self,
+        query: str,
+        top_k: int = 5
+    ):
+
+        return self.search(
+
+            query=query,
+
+            top_k=top_k,
+
+            metadata_filter={
+
+                "flow": "Expense"
+
+            }
+
+        )
+
+    # ======================================================
+    # Search Income Only
+    # ======================================================
+
+    def search_income(
+        self,
+        query: str,
+        top_k: int = 5
+    ):
+
+        return self.search(
+
+            query=query,
+
+            top_k=top_k,
+
+            metadata_filter={
+
+                "flow": "Income"
+
+            }
+
+        )
+
+    # ======================================================
+    # Pretty Print
+    # ======================================================
+
+    @staticmethod
+    def print_results(results: List[Dict]):
+
+        print()
+
+        for index, result in enumerate(results, start=1):
+
+            print("=" * 60)
+
+            print(f"Result {index}")
+
+            print("=" * 60)
+
+            print("Similarity :", result["score"])
+
+            for key, value in result["metadata"].items():
+
+                print(f"{key}: {value}")
+
+            print()

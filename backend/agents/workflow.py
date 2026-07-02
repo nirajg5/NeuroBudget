@@ -1,85 +1,160 @@
 """
-workflow.py — LangGraph StateGraph definition.
-Orchestrates the 4-agent pipeline: Expense → Insight → Risk → Planning.
+LangGraph Workflow
 
-Graph flow:
-    START
-      ↓
-  expense_agent
-      ↓
-  insight_agent
-      ↓
-  risk_agent
-      ↓
-  planning_agent
-      ↓
-    END
+Creates the multi-agent workflow.
 """
 
-from langgraph.graph import StateGraph, END
-from models.state import AgentState
-from agents.expense_agent import expense_agent
-from agents.insight_agent import insight_agent
-from agents.risk_agent import risk_agent
-from agents.planning_agent import planning_agent
+from langgraph.graph import StateGraph
+from langgraph.graph import END
 
+from models.state import GraphState
 
-def build_workflow() -> StateGraph:
+from agents.supervisor import supervisor_node
+from agents.expense_agent import expense_node
+from agents.insight_agent import insight_node
+from agents.risk_agent import risk_node
+from agents.planning_agent import planning_node
+
+from core.logger import logger
+
+class NeuroBudgetWorkflow:
+
     """
-    Build and compile the LangGraph workflow.
-    Returns a compiled graph ready to invoke.
+    LangGraph Workflow
     """
 
-    # Create graph with our shared state type
-    graph = StateGraph(AgentState)
+    def __init__(self):
 
-    # Register all agent nodes
-    graph.add_node("expense_agent", expense_agent)
-    graph.add_node("insight_agent", insight_agent)
-    graph.add_node("risk_agent", risk_agent)
-    graph.add_node("planning_agent", planning_agent)
+        self.graph = self.build_graph()
 
-    # Linear flow: each agent feeds into the next
-    graph.set_entry_point("expense_agent")
-    graph.add_edge("expense_agent", "insight_agent")
-    graph.add_edge("insight_agent", "risk_agent")
-    graph.add_edge("risk_agent", "planning_agent")
-    graph.add_edge("planning_agent", END)
+    def build_graph(self):
 
-    return graph.compile()
+        workflow = StateGraph(GraphState)
 
+        # ============================
+        # Nodes
+        # ============================
 
-def run_workflow(
-    user_message: str,
-    transactions: list,
-    session_id: str = "default"
-) -> AgentState:
-    """
-    Run the full multi-agent workflow.
+        workflow.add_node(
 
-    Args:
-        user_message: The user's query
-        transactions: List of transaction dicts from DB
-        session_id: Conversation session ID
+            "Supervisor",
 
-    Returns:
-        Final AgentState with all agent outputs populated
-    """
-    app = build_workflow()
+            supervisor_node
 
-    initial_state: AgentState = {
-        "user_message": user_message,
-        "session_id": session_id,
-        "transactions_df": None,
-        "raw_transactions": transactions,
-        "expense_analysis": {},
-        "insights": {},
-        "risk_flags": {},
-        "savings_plan": {},
-        "final_response": "",
-        "reasoning_chain": [],
-        "errors": [],
-    }
+        )
 
-    result = app.invoke(initial_state)
-    return result
+        workflow.add_node(
+
+            "ExpenseAgent",
+
+            expense_node
+
+        )
+
+        workflow.add_node(
+
+            "InsightAgent",
+
+            insight_node
+
+        )
+
+        workflow.add_node(
+
+            "RiskAgent",
+
+            risk_node
+
+        )
+
+        workflow.add_node(
+
+            "PlanningAgent",
+
+            planning_node
+        )
+
+        workflow.set_entry_point(
+
+            "Supervisor"
+
+        )
+
+        workflow.add_conditional_edges(
+
+            "Supervisor",
+
+            lambda state: state["next_agent"],
+
+            {
+
+                "ExpenseAgent": "ExpenseAgent",
+
+                "InsightAgent": "InsightAgent",
+
+                "RiskAgent": "RiskAgent",
+
+                "PlanningAgent": "PlanningAgent"
+
+            }
+
+        )
+
+        workflow.add_edge(
+
+            "ExpenseAgent",
+
+            END
+
+        )
+
+        workflow.add_edge(
+
+            "InsightAgent",
+
+            END
+
+        )
+
+        workflow.add_edge(
+
+            "RiskAgent",
+
+            END
+
+        )
+
+        workflow.add_edge(
+
+            "PlanningAgent",
+
+            END
+
+        )
+
+        logger.success(
+
+            "LangGraph Workflow Created."
+
+        )
+
+        return workflow.compile()
+    
+
+    def run(
+
+        self,
+
+        state: GraphState
+
+    ):
+
+        logger.info(
+
+            "Running LangGraph Workflow..."
+
+        )
+
+        return self.graph.invoke(state)
+    
+workflow = NeuroBudgetWorkflow()

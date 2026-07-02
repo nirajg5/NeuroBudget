@@ -1,35 +1,338 @@
 """
-state.py — LangGraph shared state definition.
-This TypedDict flows through all agents in the workflow graph.
+Graph State
+
+Shared state used by the LangGraph workflow.
 """
 
 from typing import TypedDict, List, Dict, Any, Optional
-import pandas as pd
+from pprint import pprint
 
 
-class AgentState(TypedDict):
+class GraphState(TypedDict):
     """
-    Shared state passed between LangGraph agents.
-    Each agent reads from and writes to this state.
+    Shared state passed between all LangGraph nodes.
     """
 
-    # Input
-    user_message: str                   # Original user query
-    session_id: str                     # Conversation session
+    # =====================================================
+    # User Request
+    # =====================================================
 
-    # Transaction data (loaded from DB or CSV)
-    transactions_df: Optional[Any]      # pandas DataFrame (Any to avoid serialization issues)
-    raw_transactions: List[Dict]        # List of transaction dicts
+    question: str
+    session_id: str
 
-    # Agent outputs — each agent populates its section
-    expense_analysis: Dict[str, Any]    # From ExpenseAgent
-    insights: Dict[str, Any]           # From InsightAgent
-    risk_flags: Dict[str, Any]         # From RiskAgent
-    savings_plan: Dict[str, Any]       # From PlanningAgent
+    # =====================================================
+    # Routing
+    # =====================================================
 
-    # Final assembled response
-    final_response: str
-    reasoning_chain: List[str]         # Explainable AI: step-by-step reasoning log
+    current_agent: str
+    next_agent: Optional[str]
 
-    # Errors (if any agent fails gracefully)
-    errors: List[str]
+    # =====================================================
+    # Retrieval
+    # =====================================================
+
+    retrieved_documents: List[Dict[str, Any]]
+
+    # =====================================================
+    # Prompt
+    # =====================================================
+
+    prompt: str
+
+    # =====================================================
+    # Final Response
+    # =====================================================
+
+    answer: str
+
+    # =====================================================
+    # Agent Outputs
+    # =====================================================
+
+    expenses: Dict[str, Any]
+
+    insights: Dict[str, Any]
+
+    risks: Dict[str, Any]
+
+    goals: Dict[str, Any]
+
+    planning: Dict[str, Any]
+
+    # =====================================================
+    # Metadata
+    # =====================================================
+
+    metadata: Dict[str, Any]
+
+    # =====================================================
+    # Error
+    # =====================================================
+
+    error: Optional[str]
+
+
+# ==========================================================
+# Create Initial State
+# ==========================================================
+
+def create_state(
+    question: str,
+    session_id: str = "default"
+) -> GraphState:
+
+    return {
+
+        "question": question,
+
+        "session_id": session_id,
+
+        "current_agent": "",
+
+        "next_agent": None,
+
+        "retrieved_documents": [],
+
+        "prompt": "",
+
+        "answer": "",
+
+        "expenses": {},
+
+        "insights": {},
+
+        "risks": {},
+
+        "goals": {},
+
+        "planning": {},
+
+        "metadata": {},
+
+        "error": None
+
+    }
+
+
+# ==========================================================
+# Update State
+# ==========================================================
+
+def update_state(
+    state: GraphState,
+    **kwargs
+) -> GraphState:
+
+    state.update(kwargs)
+
+    return state
+
+
+# ==========================================================
+# Reset State
+# ==========================================================
+
+def reset_state(
+    state: GraphState
+) -> GraphState:
+
+    state["retrieved_documents"] = []
+
+    state["prompt"] = ""
+
+    state["answer"] = ""
+
+    state["expenses"] = {}
+
+    state["insights"] = {}
+
+    state["risks"] = {}
+
+    state["goals"] = {}
+
+    state["planning"] = {}
+
+    state["metadata"] = {}
+
+    state["error"] = None
+
+    state["current_agent"] = ""
+
+    state["next_agent"] = None
+
+    return state
+
+
+# ==========================================================
+# Add Retrieved Documents
+# ==========================================================
+
+def add_documents(
+    state: GraphState,
+    documents: List[Dict[str, Any]]
+) -> GraphState:
+
+    state["retrieved_documents"] = documents
+
+    return state
+
+
+# ==========================================================
+# Store Prompt
+# ==========================================================
+
+def set_prompt(
+    state: GraphState,
+    prompt: str
+) -> GraphState:
+
+    state["prompt"] = prompt
+
+    return state
+
+
+# ==========================================================
+# Store Final Answer
+# ==========================================================
+
+def set_answer(
+    state: GraphState,
+    answer: str
+) -> GraphState:
+
+    state["answer"] = answer
+
+    return state
+
+
+# ==========================================================
+# Store Planning Report
+# ==========================================================
+
+def set_planning(
+    state: GraphState,
+    planning: Dict[str, Any]
+) -> GraphState:
+
+    state["planning"] = planning
+
+    return state
+
+
+# ==========================================================
+# Store Goals
+# ==========================================================
+
+def set_goals(
+    state: GraphState,
+    goals: Dict[str, Any]
+) -> GraphState:
+
+    state["goals"] = goals
+
+    return state
+
+
+# ==========================================================
+# Store Insights
+# ==========================================================
+
+def set_insights(
+    state: GraphState,
+    insights: Dict[str, Any]
+) -> GraphState:
+
+    state["insights"] = insights
+
+    return state
+
+
+# ==========================================================
+# Store Risks
+# ==========================================================
+
+def set_risks(
+    state: GraphState,
+    risks: Dict[str, Any]
+) -> GraphState:
+
+    state["risks"] = risks
+
+    return state
+
+
+# ==========================================================
+# Store Expenses
+# ==========================================================
+
+def set_expenses(
+    state: GraphState,
+    expenses: Dict[str, Any]
+) -> GraphState:
+
+    state["expenses"] = expenses
+
+    return state
+
+
+# ==========================================================
+# Set Current Agent
+# ==========================================================
+
+def set_current_agent(
+    state: GraphState,
+    agent: str
+) -> GraphState:
+
+    state["current_agent"] = agent
+
+    return state
+
+
+# ==========================================================
+# Set Next Agent
+# ==========================================================
+
+def set_next_agent(
+    state: GraphState,
+    agent: Optional[str]
+) -> GraphState:
+
+    state["next_agent"] = agent
+
+    return state
+
+
+# ==========================================================
+# Store Error
+# ==========================================================
+
+def set_error(
+    state: GraphState,
+    error: str
+) -> GraphState:
+
+    state["error"] = error
+
+    return state
+
+
+# ==========================================================
+# Pretty Print
+# ==========================================================
+
+def print_state(
+    state: GraphState
+):
+
+    print()
+
+    print("=" * 80)
+
+    print("GRAPH STATE")
+
+    print("=" * 80)
+
+    pprint(state)
+
+    print()

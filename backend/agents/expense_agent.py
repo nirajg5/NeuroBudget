@@ -1,83 +1,65 @@
 """
-expense_agent.py — First agent in the LangGraph workflow.
-Analyzes transaction data: totals, category breakdown, spending patterns.
+Expense Agent
+
+Handles all expense-related questions.
 """
 
-from typing import Dict, Any
-from models.state import AgentState
-from tools.calculator import (
-    total_spending,
-    spending_by_category,
-    top_category,
-    daily_average_spending,
-)
-from tools.charts import spending_pie_chart, spending_bar_chart
+from models.state import GraphState
+
+from rag.rag_pipeline import RAGPipeline
+
+from core.logger import logger
 
 
-def expense_agent(state: AgentState) -> AgentState:
+class ExpenseAgent:
+
     """
-    Expense Agent — analyzes raw transactions and computes spending stats.
-
-    Reads:
-        state["raw_transactions"]
-
-    Writes:
-        state["expense_analysis"]
-        state["reasoning_chain"] (appends)
+    Expense Analysis Agent
     """
-    reasoning = state.get("reasoning_chain", [])
-    errors = state.get("errors", [])
 
-    try:
-        transactions = state.get("raw_transactions", [])
+    def __init__(self):
 
-        if not transactions:
-            state["expense_analysis"] = {
-                "total": 0,
-                "by_category": {},
-                "top_category": ("Other", 0),
-                "daily_average": 0,
-                "charts": {},
-                "transaction_count": 0,
-            }
-            reasoning.append("ExpenseAgent: No transactions found — returning empty analysis.")
-            state["reasoning_chain"] = reasoning
-            return state
+        self.rag = RAGPipeline()
 
-        # Core calculations
-        total = total_spending(transactions)
-        by_cat = spending_by_category(transactions)
-        top_cat = top_category(transactions)
-        daily_avg = daily_average_spending(transactions)
+    # =====================================================
+    # Execute
+    # =====================================================
 
-        # Chart data
-        pie = spending_pie_chart(by_cat)
-        bar = spending_bar_chart(by_cat)
+    def run(
+        self,
+        state: GraphState
+    ) -> GraphState:
 
-        state["expense_analysis"] = {
-            "total": total,
-            "by_category": by_cat,
-            "top_category": top_cat,
-            "daily_average": daily_avg,
-            "transaction_count": len(transactions),
-            "charts": {
-                "pie": pie,
-                "bar": bar,
-            },
+        logger.info("Expense Agent Started...")
+
+        question = state["question"]
+
+        result = self.rag.ask(question)
+
+        state["retrieved_documents"] = result["sources"]
+
+        state["answer"] = result["answer"]
+
+        state["expenses"] = {
+
+            "documents": result["retrieved_documents"],
+
+            "status": "completed"
+
         }
 
-        reasoning.append(
-            f"ExpenseAgent: Analyzed {len(transactions)} transactions. "
-            f"Total spend: ₹{total:,.2f}. "
-            f"Top category: {top_cat[0]} (₹{top_cat[1]:,.2f}). "
-            f"Daily average: ₹{daily_avg:,.2f}."
-        )
+        state["current_agent"] = "ExpenseAgent"
 
-    except Exception as e:
-        errors.append(f"ExpenseAgent error: {str(e)}")
-        state["expense_analysis"] = {}
-        reasoning.append(f"ExpenseAgent: Failed with error — {str(e)}")
+        logger.success("Expense Agent Finished.")
 
-    state["reasoning_chain"] = reasoning
-    state["errors"] = errors
-    return state
+        return state
+    
+
+expense_agent = ExpenseAgent()
+
+
+def expense_node(
+    state: GraphState
+):
+
+    return expense_agent.run(state)

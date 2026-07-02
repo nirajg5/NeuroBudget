@@ -1,64 +1,98 @@
 """
-db.py — SQLAlchemy SQLite setup.
-Defines Transaction and ChatMessage tables with lightweight ORM models.
+Database Configuration
+
+Creates:
+
+1. PostgreSQL Engine
+2. Database Session
+3. SQLAlchemy Base
+4. FastAPI Dependency
 """
 
-from sqlalchemy import (
-    create_engine, Column, Integer, String, Float, DateTime, Text
-)
-from sqlalchemy.orm import declarative_base, sessionmaker
-from datetime import datetime
-from config import get_settings
+from sqlalchemy import create_engine
+from sqlalchemy import text
+from sqlalchemy.orm import declarative_base
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import Session
 
-settings = get_settings()
+from core.config import settings
+from core.logger import logger
 
-# SQLite engine — file-based, no server needed
+
+# ==========================================================
+# SQLAlchemy Engine
+# ==========================================================
+
 engine = create_engine(
-    settings.database_url,
-    connect_args={"check_same_thread": False}  # Required for SQLite + FastAPI
+    settings.DATABASE_URL,
+    echo=False,
+    future=True,
+    pool_pre_ping=True,
+    pool_size=10,
+    max_overflow=20,
 )
 
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-Base = declarative_base()
+# ==========================================================
+# Session Factory
+# ==========================================================
 
+SessionLocal = sessionmaker(
+    bind=engine,
+    autoflush=False,
+    autocommit=False,
+    expire_on_commit=False,
+    class_=Session,
+)
 
-# ─── ORM Models ───────────────────────────────────────────────────────────────
+# ==========================================================
+# Base Class
+# ==========================================================
 
-class TransactionModel(Base):
-    """Stores parsed financial transactions."""
-    __tablename__ = "transactions"
+BaseModel = declarative_base()
 
-    id = Column(Integer, primary_key=True, index=True)
-    date = Column(String, nullable=False)
-    description = Column(String, nullable=False)
-    amount = Column(Float, nullable=False)
-    category = Column(String, default="Other")
-    source = Column(String, default="manual")      # Filename or "manual"
-    created_at = Column(DateTime, default=datetime.utcnow)
-
-
-class ChatMessageModel(Base):
-    """Stores conversation history per session."""
-    __tablename__ = "chat_messages"
-
-    id = Column(Integer, primary_key=True, index=True)
-    session_id = Column(String, index=True, nullable=False)
-    role = Column(String, nullable=False)          # "user" or "assistant"
-    content = Column(Text, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
-
-
-# ─── DB Init & Dependency ─────────────────────────────────────────────────────
-
-def init_db():
-    """Create all tables. Call once at startup."""
-    Base.metadata.create_all(bind=engine)
-
+# ==========================================================
+# FastAPI Dependency
+# ==========================================================
 
 def get_db():
-    """FastAPI dependency — yields a DB session and closes it after request."""
+    """
+    Dependency for FastAPI.
+
+    Example:
+        db: Session = Depends(get_db)
+    """
+
     db = SessionLocal()
+
     try:
         yield db
+
     finally:
+        db.close()
+
+# ==========================================================
+# Database Connection Test
+# ==========================================================
+
+def test_connection():
+    """
+    Tests PostgreSQL connection.
+    """
+
+    db = SessionLocal()
+
+    try:
+
+        db.execute(text("SELECT 1"))
+
+        logger.success("✅ PostgreSQL Connected Successfully")
+
+    except Exception:
+
+        logger.exception("❌ Failed to connect to PostgreSQL")
+
+        raise
+
+    finally:
+
         db.close()

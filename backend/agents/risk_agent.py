@@ -1,140 +1,209 @@
 """
-risk_agent.py — Third agent in the LangGraph workflow.
-Detects financial risks: overspending, abnormal transactions, budget spikes.
-Combines rule-based detection with an LLM explanation.
+Risk Agent
+
+Detects overspending, unusual transactions,
+and financial risks.
 """
 
-from openai import OpenAI
-from config import get_settings
-from models.state import AgentState
-from tools.calculator import (
-    detect_spending_spikes,
-    overspending_categories,
-    spending_by_category,
-)
+from sqlalchemy.orm import Session
+from sqlalchemy import func
 
-settings = get_settings()
+from database.db import SessionLocal
+from database.models import Transaction
 
-client = OpenAI(
-    base_url=settings.openrouter_base_url,
-    api_key=settings.openrouter_api_key,
-)
+from models.state import GraphState
+
+from rag.rag_pipeline import RAGPipeline
+
+from core.logger import logger
 
 
-def _compute_risk_score(
-    anomalies: list,
-    overspending: list,
-    total_spending: float
-) -> float:
+class RiskAgent:
+
     """
-    Heuristic risk score from 0 to 100.
-    - Each anomaly adds 10 points
-    - Each overspent category adds 15 points
-    - High spending base adds up to 20 points
-    Capped at 100.
+    Financial Risk Analysis Agent
     """
-    score = 0.0
-    score += len(anomalies) * 10
-    score += len(overspending) * 15
 
-    # High total spending increases base risk slightly
-    if total_spending > 50000:
-        score += 20
-    elif total_spending > 20000:
-        score += 10
-    elif total_spending > 10000:
-        score += 5
+    def __init__(self):
 
-    return min(score, 100.0)
+        self.db: Session = SessionLocal()
 
+        self.rag = RAGPipeline()
 
-def risk_agent(state: AgentState) -> AgentState:
-    """
-    Risk Agent — detects anomalies, overspending, and financial red flags.
+    # =====================================================
+    # Calculate Average Expense
+    # =====================================================
 
-    Reads:
-        state["raw_transactions"]
-        state["expense_analysis"]
+    def average_expense(self):
 
-    Writes:
-        state["risk_flags"]
-        state["reasoning_chain"] (appends)
-    """
-    reasoning = state.get("reasoning_chain", [])
-    errors = state.get("errors", [])
+        avg = (
 
-    try:
-        transactions = state.get("raw_transactions", [])
-        analysis = state.get("expense_analysis", {})
-        total = analysis.get("total", 0)
-        by_cat = analysis.get("by_category", {})
+            self.db.query(
 
-        # Rule-based detection
-        anomalies = detect_spending_spikes(transactions, threshold_multiplier=2.0)
-        overspending = overspending_categories(by_cat)
+                func.avg(Transaction.amount)
 
-        risk_score = _compute_risk_score(anomalies, overspending, total)
-        risk_level = (
-            "high" if risk_score >= 60
-            else "medium" if risk_score >= 30
-            else "low"
+            )
+
+            .filter(
+
+                Transaction.flow == "Expense"
+
+            )
+
+            .scalar()
+
         )
 
-        # Safe-to-spend = 20% of current total (conservative heuristic)
-        safe_to_spend = round(total * 0.20, 2)
+        return float(avg or 0)
 
-        # Ask LLM to explain risks in human language
-        risk_context = f"""
-Risk Analysis Data:
-- Total Spending: ₹{total:,.2f}
-- Risk Score: {risk_score}/100
-- Anomalous Transactions: {len(anomalies)} detected
-- Overspending Categories: {[o.get('category', 'N/A') for o in overspending]}
-- Spending Breakdown: {by_cat}
+    # =====================================================
+    # Large Transactions
+    # =====================================================
 
-Anomalous transactions:
-{chr(10).join([f"  - {a.get('date')}: {a.get('description')} ₹{a.get('amount',0):,.2f}" for a in anomalies[:5]]) or "  None detected"}
+    def large_transactions(self):
 
-Overspending:
-{chr(10).join([f"  - {o.get('category')}: {o.get('message', f'over limit by ₹{o.get(\"overage\", 0):,.2f}')}" for o in overspending]) or "  None detected"}
-"""
+        average = self.average_expense()
 
-        llm_response = client.chat.completions.create(
-            model=settings.openrouter_model,
-            messages=[
-                {"role": "system", "content": "You are a financial risk analyst. Be concise and specific."},
-                {"role": "user", "content": f"""Analyze these financial risks and explain what the user should do.
-                
-{risk_context}
+        threshold = average * 2
 
-Write 2-4 sentences explaining the main risks and one clear action step for each.
-Use plain language. Include specific numbers where helpful."""}
-            ],
-            max_tokens=400,
-            temperature=0.3,
+        transactions = (
+
+            self.db.query(Transaction)
+
+            .filter(
+
+                Transaction.amount >= threshold
+
+            )
+
+            .all()
+
         )
 
-        risk_explanation = llm_response.choices[0].message.content.strip()
+        return transactions
 
-        state["risk_flags"] = {
-            "risk_score": risk_score,
-            "risk_level": risk_level,
-            "anomalies": anomalies[:10],         # Cap at 10
-            "overspending": overspending,
-            "safe_to_spend": safe_to_spend,
-            "explanation": risk_explanation,
+    # =====================================================
+    # Risk Score
+    # =====================================================
+
+    def calculate_risk_score(self):
+
+        average = self.average_expense()
+
+        risky = len(self.large_transactions())
+
+        score = min(
+
+            100,
+
+            int((risky * 10) + (average / 1000))
+
+        )
+
+        return score
+
+    # =====================================================
+    # Recommendations
+    # =====================================================
+
+    def recommendations(
+        self,
+        score
+    ):
+
+        recommendations = []
+
+        if score >= 80:
+
+            recommendations.append(
+
+                "Your spending risk is extremely high."
+
+            )
+
+            recommendations.append(
+
+                "Reduce discretionary spending immediately."
+
+            )
+
+        elif score >= 60:
+
+            recommendations.append(
+
+                "Monitor shopping and travel expenses."
+
+            )
+
+        elif score >= 40:
+
+            recommendations.append(
+
+                "Your spending is moderately healthy."
+
+            )
+
+        else:
+
+            recommendations.append(
+
+                "Your financial risk is low."
+
+            )
+
+        return recommendations
+
+    # =====================================================
+    # Execute
+    # =====================================================
+
+    def run(
+        self,
+        state: GraphState
+    ) -> GraphState:
+
+        logger.info("Risk Agent Started...")
+
+        score = self.calculate_risk_score()
+
+        large_txns = self.large_transactions()
+
+        advice = self.recommendations(score)
+
+        rag_result = self.rag.ask(
+
+            state["question"]
+
+        )
+
+        state["retrieved_documents"] = rag_result["sources"]
+
+        state["answer"] = rag_result["answer"]
+
+        state["risks"] = {
+
+            "risk_score": score,
+
+            "large_transactions": len(large_txns),
+
+            "recommendations": advice,
+
+            "status": "completed"
+
         }
 
-        reasoning.append(
-            f"RiskAgent: Risk score={risk_score:.0f}/100 ({risk_level}). "
-            f"Found {len(anomalies)} anomalies and {len(overspending)} overspending categories."
-        )
+        state["current_agent"] = "RiskAgent"
 
-    except Exception as e:
-        errors.append(f"RiskAgent error: {str(e)}")
-        state["risk_flags"] = {"risk_score": 0, "risk_level": "unknown", "error": str(e)}
-        reasoning.append(f"RiskAgent: Failed — {str(e)}")
+        logger.success("Risk Agent Finished.")
 
-    state["reasoning_chain"] = reasoning
-    state["errors"] = errors
-    return state
+        return state
+
+
+risk_agent = RiskAgent()
+
+
+def risk_node(
+    state: GraphState
+):
+
+    return risk_agent.run(state)

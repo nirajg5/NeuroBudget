@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.pyc
+
+# Environment
+.env
+venv/
+neurobudget_env/
+
+# Uploaded files
+uploads/raw/*
+uploads/processed/*
+uploads/archive/*
+
+# Keep folders
+!uploads/raw/.gitkeep
+!uploads/processed/.gitkeep
+!uploads/archive/.gitkeep
+
+# Logs
+logs/
+
+# VS Code
+.vscode/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# macOS
+.DS_Store
