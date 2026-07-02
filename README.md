@@ -45,7 +45,7 @@ Core capabilities implemented in the backend today:
 
 **Chat pipeline** — client question routed through the multi-agent workflow to a grounded LLM answer:
 
-![NeuroBudget chat flow](assets/chat-flow(1).png)
+![NeuroBudget chat flow](assets/chat_new.png)
 
 ---
 
