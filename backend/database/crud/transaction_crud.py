@@ -247,6 +247,8 @@ def get_monthly_summary(
 
             Transaction.transaction_month,
 
+            Transaction.month_number,
+
             func.sum(Transaction.amount).label("total")
 
         )
@@ -257,9 +259,19 @@ def get_monthly_summary(
 
         )
 
-        .group_by(Transaction.transaction_month)
+        .group_by(
 
-        .order_by(Transaction.month_number)
+            Transaction.transaction_month,
+
+            Transaction.month_number
+
+        )
+
+        .order_by(
+
+            Transaction.month_number.asc()
+
+        )
 
         .all()
 

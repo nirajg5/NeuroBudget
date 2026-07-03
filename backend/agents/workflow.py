@@ -4,6 +4,8 @@ LangGraph Workflow
 Creates the multi-agent workflow.
 """
 
+import time
+
 from langgraph.graph import StateGraph
 from langgraph.graph import END
 
@@ -17,8 +19,8 @@ from agents.planning_agent import planning_node
 
 from core.logger import logger
 
-class NeuroBudgetWorkflow:
 
+class NeuroBudgetWorkflow:
     """
     LangGraph Workflow
     """
@@ -27,58 +29,54 @@ class NeuroBudgetWorkflow:
 
         self.graph = self.build_graph()
 
+    # =====================================================
+    # Build Graph
+    # =====================================================
+
     def build_graph(self):
 
         workflow = StateGraph(GraphState)
 
-        # ============================
+        # =================================================
         # Nodes
-        # ============================
+        # =================================================
 
         workflow.add_node(
-
             "Supervisor",
-
             supervisor_node
-
         )
 
         workflow.add_node(
-
             "ExpenseAgent",
-
             expense_node
-
         )
 
         workflow.add_node(
-
             "InsightAgent",
-
             insight_node
-
         )
 
         workflow.add_node(
-
             "RiskAgent",
-
             risk_node
-
         )
 
         workflow.add_node(
-
             "PlanningAgent",
-
             planning_node
         )
 
+        # =================================================
+        # Entry
+        # =================================================
+
         workflow.set_entry_point(
-
             "Supervisor"
-
         )
+
+        # =================================================
+        # Conditional Routing
+        # =================================================
 
         workflow.add_conditional_edges(
 
@@ -100,61 +98,73 @@ class NeuroBudgetWorkflow:
 
         )
 
-        workflow.add_edge(
+        # =================================================
+        # End Nodes
+        # =================================================
 
+        workflow.add_edge(
             "ExpenseAgent",
-
             END
-
         )
 
         workflow.add_edge(
-
             "InsightAgent",
-
             END
-
         )
 
         workflow.add_edge(
-
             "RiskAgent",
-
             END
-
         )
 
         workflow.add_edge(
-
             "PlanningAgent",
-
             END
-
         )
 
         logger.success(
-
             "LangGraph Workflow Created."
-
         )
 
         return workflow.compile()
-    
+
+    # =====================================================
+    # Run Workflow
+    # =====================================================
 
     def run(
-
         self,
-
         state: GraphState
-
     ):
 
         logger.info(
-
             "Running LangGraph Workflow..."
-
         )
 
-        return self.graph.invoke(state)
-    
+        start_time = time.time()
+
+        state["workflow_status"] = "running"
+
+        result = self.graph.invoke(state)
+
+        end_time = time.time()
+
+        result["execution_time"] = round(
+            end_time - start_time,
+            3
+        )
+
+        result["workflow_status"] = "completed"
+
+        logger.success(
+            f"Workflow Completed in {result['execution_time']} sec"
+        )
+
+        return result
+
+
+# =====================================================
+# Singleton
+# =====================================================
+
 workflow = NeuroBudgetWorkflow()

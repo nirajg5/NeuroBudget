@@ -60,6 +60,14 @@ class GraphState(TypedDict):
     planning: Dict[str, Any]
 
     # =====================================================
+    # Workflow
+    # =====================================================
+
+    execution_time: float
+
+    workflow_status: str
+
+    # =====================================================
     # Metadata
     # =====================================================
 
@@ -107,6 +115,10 @@ def create_state(
 
         "planning": {},
 
+        "execution_time": 0.0,
+
+        "workflow_status": "initialized",
+
         "metadata": {},
 
         "error": None
@@ -151,6 +163,10 @@ def reset_state(
     state["goals"] = {}
 
     state["planning"] = {}
+
+    state["execution_time"] = 0.0
+
+    state["workflow_status"] = "initialized"
 
     state["metadata"] = {}
 
@@ -206,7 +222,7 @@ def set_answer(
 
 
 # ==========================================================
-# Store Planning Report
+# Store Planning
 # ==========================================================
 
 def set_planning(

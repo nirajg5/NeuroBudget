@@ -22,6 +22,18 @@ def create_report(
 
     return report
 
+def get_all_reports(
+    db: Session
+):
+
+    return (
+        db.query(Report)
+        .order_by(
+            Report.created_at.desc()
+        )
+        .all()
+    )
+
 def bulk_create_reports(
     db: Session,
     reports: List[Report]

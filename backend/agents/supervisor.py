@@ -6,19 +6,15 @@ to the appropriate agent.
 """
 
 from models.state import GraphState
-
-from agents.expense_agent import expense_node
-from agents.insight_agent import insight_node
-from agents.risk_agent import risk_node
-from agents.planning_agent import planning_node
-
 from core.logger import logger
 
 
 class SupervisorAgent:
-
     """
     LangGraph Supervisor
+
+    Responsible only for deciding
+    which agent should execute.
     """
 
     # =====================================================
@@ -95,19 +91,15 @@ class SupervisorAgent:
         ]
 
         if any(word in question for word in expense_keywords):
-
             return "ExpenseAgent"
 
         if any(word in question for word in insight_keywords):
-
             return "InsightAgent"
 
         if any(word in question for word in risk_keywords):
-
             return "RiskAgent"
 
         if any(word in question for word in planning_keywords):
-
             return "PlanningAgent"
 
         return "InsightAgent"
@@ -124,42 +116,30 @@ class SupervisorAgent:
         logger.info("Supervisor Started...")
 
         agent = self.route(
-
             state["question"]
-
         )
 
         state["current_agent"] = "Supervisor"
 
         state["next_agent"] = agent
 
-        logger.info(
+        state["workflow_status"] = "routing"
 
-            f"Routing to {agent}"
+        logger.info(f"Routing to {agent}")
 
-        )
+        return state
 
-        if agent == "ExpenseAgent":
 
-            return expense_node(state)
-
-        elif agent == "InsightAgent":
-
-            return insight_node(state)
-
-        elif agent == "RiskAgent":
-
-            return risk_node(state)
-
-        elif agent == "PlanningAgent":
-
-            return planning_node(state)
-
-        return insight_node(state)
-
+# =====================================================
+# Singleton
+# =====================================================
 
 supervisor = SupervisorAgent()
 
+
+# =====================================================
+# LangGraph Node
+# =====================================================
 
 def supervisor_node(
     state: GraphState

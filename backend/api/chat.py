@@ -11,6 +11,7 @@ from models.state import create_state
 
 from agents.workflow import workflow
 
+
 router = APIRouter(
 
     prefix="/chat",
@@ -19,6 +20,10 @@ router = APIRouter(
 
 )
 
+
+# ==========================================================
+# Chat Endpoint
+# ==========================================================
 
 @router.post(
 
@@ -42,18 +47,18 @@ def chat(
 
     )
 
-    result = workflow.run(
-
-        state
-
-    )
+    result = workflow.run(state)
 
     return ChatResponse(
 
-        answer=result["answer"],
+        answer=result.get("answer", ""),
 
-        current_agent=result["current_agent"],
+        current_agent=result.get("current_agent", ""),
 
-        session_id=result["session_id"]
+        session_id=result.get("session_id", request.session_id),
+
+        workflow_status=result.get("workflow_status", "completed"),
+
+        execution_time=result.get("execution_time", 0.0)
 
     )
